@@ -79,6 +79,9 @@
   .sheet-body { padding: 16px 20px 22px; }
   .desc { margin: 0 0 12px; white-space: pre-line; }
   .btn { display: inline-block; background: var(--accent); color: #fff; text-decoration: none; padding: 8px 16px; border-radius: 8px; font-size: .9rem; }
+  .dh { font-size: 1.1rem; margin: 28px 0 10px; }
+  .drivebox { background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(15,23,42,.08); overflow: hidden; margin-bottom: 32px; }
+  .drivebox iframe { display: block; width: 100%; height: 80vh; min-height: 480px; border: 0; }
   [hidden] { display: none !important; }
   .btn.alt { background: var(--soft); color: var(--accent); }
   .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 18px; }
@@ -114,6 +117,10 @@
   <div class="filters" id="filters" role="group" aria-label="Filter jenis"></div>
   <div id="content"><div class="grid"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div></div>
   <nav class="pager" id="pager" aria-label="Halaman"></nav>
+  <section id="driveSection" hidden aria-label="Foto dan video di Google Drive">
+    <h2 class="dh">Foto &amp; video</h2>
+    <div class="drivebox"><iframe id="driveFrame" title="Foto dan video di Google Drive" loading="lazy"></iframe></div>
+  </section>
 </main>
 
 <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
@@ -356,7 +363,8 @@ function render() {
   var slice = list.slice((state.page - 1) * PER_PAGE, state.page * PER_PAGE);
 
   if (!state.items.length) {
-    $('content').innerHTML = '<div class="state">Belum ada dokumentasi.</div>';
+    $('content').innerHTML = $('driveSection').hidden ? '<div class="state">Belum ada dokumentasi.</div>' : '';
+    $('filters').innerHTML = $('driveSection').hidden ? $('filters').innerHTML : '';
   } else if (!list.length) {
     $('content').innerHTML = '<div class="state">Tidak ada hasil yang cocok. Coba kata kunci atau filter lain.</div>';
   } else {
@@ -494,9 +502,10 @@ Promise.all([loadTab(TAB_DOK, PUB_DOK), loadTab(TAB_KOM, PUB_KOM).catch(function
   var auto = res[2].filter(function (o) { return !known[driveFileId(o.url) || driveFolderId(o.url)]; });
   state.items = rows.concat(auto).map(normalize)
     .sort(function (a, b) { return b.time - a.time || (parseInt(b.id, 10) || 0) - (parseInt(a.id, 10) || 0); });
-  if (DRIVE_FOLDER_ID && !known[DRIVE_FOLDER_ID]) {
-    state.items.unshift(normalize({ id: 'drive-folder', slug: 'semua-foto', name: 'Semua Foto (Google Drive)', tipe: 'folder',
-      url: 'https://drive.google.com/drive/folders/' + DRIVE_FOLDER_ID, deskripsi: 'Seluruh foto dan video yang tersimpan di folder Google Drive.', created_at: '' }));
+  // Tanpa API key, foto/video di folder Drive ditampilkan langsung sebagai grid (tanpa perlu klik kartu folder)
+  if (DRIVE_FOLDER_ID && !auto.length) {
+    $('driveFrame').src = 'https://drive.google.com/embeddedfolderview?id=' + DRIVE_FOLDER_ID + '#grid';
+    $('driveSection').hidden = false;
   }
   res[1].forEach(function (c) {
     if (!c.dokumentasi_id || !(c.komentar || '').trim()) return;
