@@ -173,7 +173,7 @@ var DRIVE_FOLDER_ID = '1zMDlmYUpZYUVA6imRiNcFACrIaLUpAW0';
 var DRIVE_API_KEY = '';
 // ATAU (lebih mudah, tanpa Google Cloud): URL Web App Google Apps Script yang mendaftar isi folder.
 // Isi salah satu agar foto tampil sebagai kartu dan terbuka sebagai POPUP di halaman ini.
-var DRIVE_LIST_URL = 'https://script.google.com/macros/s/AKfycbzWp2yh-1xb_uXGIT-rEHWnUrBGA4B12bwfC4iZqMXZwcd6DFDKUpkFdbRRmsF-VaR-YA/exec';
+var DRIVE_LIST_URL = 'https://script.google.com/macros/s/AKfycbzENA7WCFt-N4Gq4vOuzHYVJt0Ve0y43o-ngPdqzeEaf29z5C0nwATler7CmdmivQhgpA/exec';
 // ===============================================
 
 var state = { items: [], comments: {}, filter: 'semua', q: '', page: 1, current: null };
@@ -239,10 +239,15 @@ function loadDriveFiles() {
     url = 'https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent("'" + DRIVE_FOLDER_ID + "' in parents and trashed=false") +
       '&fields=' + encodeURIComponent('files(id,name,mimeType,createdTime)') + '&orderBy=createdTime%20desc&pageSize=1000&key=' + encodeURIComponent(DRIVE_API_KEY);
   }
-  if (!url) return Promise.resolve([]);
-  return fetch(url).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(function (j) {
-      return (j.files || []).map(function (f) {
+  if (!url) { state.driveError = 'DRIVE_LIST_URL belum diisi.'; return Promise.resolve([]); }
+  return fetch(url).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+    .then(function (t) {
+      if (/^\s*<(!doctype|html)/i.test(t)) throw new Error('Apps Script mengembalikan halaman HTML (akses belum "Anyone" / belum di-deploy ulang)');
+      var j;
+      try { j = JSON.parse(t); } catch (e) { throw new Error('Respons Apps Script bukan JSON'); }
+      var files = Array.isArray(j) ? j : (j.files || []);
+      if (!files.length) throw new Error('Apps Script tidak mengembalikan file apa pun');
+      return files.map(function (f) {
         var isFolder = f.mimeType === 'application/vnd.google-apps.folder';
         var isVideo = /^video\//.test(f.mimeType);
         if (!isFolder && !isVideo && !/^image\//.test(f.mimeType)) return null;
@@ -254,7 +259,7 @@ function loadDriveFiles() {
           created_at: f.createdTime, deskripsi: '', cover_url: ''
         };
       }).filter(Boolean);
-    }).catch(function () { return []; });
+    }).catch(function (e) { state.driveError = e.message || String(e); return []; });
 }
 
 // ---------- URL helpers ----------
@@ -560,6 +565,13 @@ Promise.all([loadTab(TAB_DOK, PUB_DOK), loadTab(TAB_KOM, PUB_KOM).catch(function
     $('driveFrame').src = 'https://drive.google.com/embeddedfolderview?id=' + DRIVE_FOLDER_ID + '#grid';
     $('driveSection').hidden = false;
     document.body.classList.add('full');
+    if (state.driveError) {
+      var n = document.createElement('div');
+      n.className = 'state error';
+      n.style.cssText = 'margin:0 0 8px;padding:8px 12px;font-size:.8rem';
+      n.innerHTML = '<b>Mode popup nonaktif:</b> ' + esc(state.driveError) + ' &mdash; sementara memakai tampilan Drive.';
+      $('driveSection').parentNode.insertBefore(n, $('driveSection'));
+    }
     fitDrive();
   }
   res[1].forEach(function (c) {
