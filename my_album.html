@@ -82,6 +82,20 @@
   .dh { font-size: 1.1rem; margin: 28px 0 10px; }
   .drivebox { background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(15,23,42,.08); overflow: hidden; margin-bottom: 32px; }
   .drivebox iframe { display: block; width: 100%; height: 80vh; min-height: 480px; border: 0; }
+  /* Mode layar penuh untuk grid Drive */
+  body.full { overflow-x: hidden; }
+  body.full .topbar { margin-bottom: 10px; padding: 10px 0; }
+  body.full .wrap { max-width: none; padding: 0 20px; }
+  body.full .dh { display: none; }
+  body.full .drivebox { border-radius: 12px; margin: 0 0 16px; }
+  body.full .drivebox iframe { height: 70vh; min-height: 420px; }
+  @media (max-width: 767.98px) {
+    h1 { font-size: 1.15rem; }
+    .topbar .wrap { gap: 8px 12px; }
+    .topbar .btn { padding: 6px 12px; font-size: .8rem; }
+    body.full .wrap { padding: 0 8px; }
+    body.full .drivebox { border-radius: 8px; }
+  }
   [hidden] { display: none !important; }
   .btn.alt { background: var(--soft); color: var(--accent); }
   .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 18px; }
@@ -490,6 +504,17 @@ document.addEventListener('keydown', function (e) { if (e.key === 'Escape') clos
 window.addEventListener('hashchange', syncHash);
 window.addEventListener('popstate', syncHash);
 
+// ---------- Grid Drive: isi sisa tinggi layar ----------
+function fitDrive() {
+  var f = $('driveFrame');
+  if (!f || $('driveSection').hidden) return;
+  var top = f.getBoundingClientRect().top + window.pageYOffset;
+  var h = Math.max(420, window.innerHeight - top - 16);
+  f.style.height = h + 'px';
+}
+window.addEventListener('resize', fitDrive);
+window.addEventListener('orientationchange', function () { setTimeout(fitDrive, 250); });
+
 // ---------- Mulai ----------
 if (DRIVE_FOLDER_ID) {
   $('driveLink').href = 'https://drive.google.com/drive/folders/' + DRIVE_FOLDER_ID;
@@ -506,6 +531,8 @@ Promise.all([loadTab(TAB_DOK, PUB_DOK), loadTab(TAB_KOM, PUB_KOM).catch(function
   if (DRIVE_FOLDER_ID && !auto.length) {
     $('driveFrame').src = 'https://drive.google.com/embeddedfolderview?id=' + DRIVE_FOLDER_ID + '#grid';
     $('driveSection').hidden = false;
+    document.body.classList.add('full');
+    fitDrive();
   }
   res[1].forEach(function (c) {
     if (!c.dokumentasi_id || !(c.komentar || '').trim()) return;
