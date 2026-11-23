@@ -97,6 +97,8 @@
     body.full .drivebox { border-radius: 8px; }
   }
   [hidden] { display: none !important; }
+  .actions.nav { margin: 0 0 12px; }
+  .btn { border: 0; cursor: pointer; font: inherit; font-size: .9rem; }
   .btn.alt { background: var(--soft); color: var(--accent); }
   .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 18px; }
   .sheet-body h3 { margin: 18px 0 8px; font-size: 1rem; }
@@ -163,6 +165,9 @@ var DRIVE_FOLDER_ID = '1zMDlmYUpZYUVA6imRiNcFACrIaLUpAW0';
 // OPSIONAL: isi API key Google Drive agar semua foto di folder tampil otomatis
 // tanpa perlu menulis baris di spreadsheet. Kosongkan jika tidak dipakai.
 var DRIVE_API_KEY = '';
+// ATAU (lebih mudah, tanpa Google Cloud): URL Web App Google Apps Script yang mendaftar isi folder.
+// Isi salah satu agar foto tampil sebagai kartu dan terbuka sebagai POPUP di halaman ini.
+var DRIVE_LIST_URL = 'https://script.google.com/macros/s/AKfycbzWp2yh-1xb_uXGIT-rEHWnUrBGA4B12bwfC4iZqMXZwcd6DFDKUpkFdbRRmsF-VaR-YA/exec';
 // ===============================================
 
 var state = { items: [], comments: {}, filter: 'semua', q: '', page: 1, current: null };
@@ -222,9 +227,13 @@ function loadTab(tab, pub) {
 
 // ---------- Folder Drive ----------
 function loadDriveFiles() {
-  if (!DRIVE_FOLDER_ID || !DRIVE_API_KEY) return Promise.resolve([]);
-  var url = 'https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent("'" + DRIVE_FOLDER_ID + "' in parents and trashed=false") +
-    '&fields=' + encodeURIComponent('files(id,name,mimeType,createdTime)') + '&orderBy=createdTime%20desc&pageSize=1000&key=' + encodeURIComponent(DRIVE_API_KEY);
+  var url = '';
+  if (DRIVE_LIST_URL) url = DRIVE_LIST_URL;
+  else if (DRIVE_FOLDER_ID && DRIVE_API_KEY) {
+    url = 'https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent("'" + DRIVE_FOLDER_ID + "' in parents and trashed=false") +
+      '&fields=' + encodeURIComponent('files(id,name,mimeType,createdTime)') + '&orderBy=createdTime%20desc&pageSize=1000&key=' + encodeURIComponent(DRIVE_API_KEY);
+  }
+  if (!url) return Promise.resolve([]);
   return fetch(url).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function (j) {
       return (j.files || []).map(function (f) {
@@ -232,7 +241,8 @@ function loadDriveFiles() {
         var isVideo = /^video\//.test(f.mimeType);
         if (!isFolder && !isVideo && !/^image\//.test(f.mimeType)) return null;
         return {
-          id: 'drive-' + f.id, name: f.name.replace(/\.[A-Za-z0-9]{2,5}$/, ''),
+          id: 'drive-' + f.id,
+          name: f.name.replace(/^\.trashed-\d+-/, '').replace(/\.[A-Za-z0-9]{2,5}$/, ''),
           tipe: isFolder ? 'folder' : isVideo ? 'video' : 'foto',
           url: isFolder ? 'https://drive.google.com/drive/folders/' + f.id : 'https://drive.google.com/file/d/' + f.id + '/view',
           created_at: f.createdTime, deskripsi: '', cover_url: ''
@@ -435,7 +445,7 @@ function openItem(key) {
   $('mStage').innerHTML = stageHTML(it);
   var cs = state.comments[it.id] || [];
   var ext = externalLink(it);
-  var html = '';
+  var html = '<div class="actions nav"><button class="btn alt" data-nav="-1" type="button">&lsaquo; Sebelumnya</button><button class="btn alt" data-nav="1" type="button">Berikutnya &rsaquo;</button></div>';
   if (it.deskripsi) html += '<p class="desc">' + esc(it.deskripsi) + '</p>';
   if (ext) {
     var label = it.tipe === 'folder' ? 'Buka folder di Google Drive' : youtubeId(it.url) ? 'Buka di YouTube' : /drive\.google\.com/i.test(ext) ? 'Buka di Google Drive' : 'Buka sumber asli';
@@ -498,6 +508,20 @@ $('pager').addEventListener('click', function (e) {
 });
 $('searchForm').addEventListener('submit', function (e) { e.preventDefault(); state.q = $('q').value.trim(); state.page = 1; render(); });
 $('q').addEventListener('input', function () { state.q = this.value.trim(); state.page = 1; render(); });
+function stepItem(d) {
+  var list = visible(), i = -1;
+  list.forEach(function (x, n) { if (String(x.key) === String(state.current)) i = n; });
+  if (i < 0 || !list.length) return;
+  openItem(list[(i + d + list.length) % list.length].key);
+}
+$('modal').addEventListener('click', function (e) {
+  var n = e.target.closest('[data-nav]');
+  if (n) stepItem(parseInt(n.getAttribute('data-nav'), 10));
+});
+document.addEventListener('keydown', function (e) {
+  if (!$('modal').classList.contains('open')) return;
+  if (e.key === 'ArrowRight') stepItem(1); else if (e.key === 'ArrowLeft') stepItem(-1);
+});
 $('mClose').addEventListener('click', closeModal);
 $('modal').addEventListener('click', function (e) { if (e.target === this) closeModal(); });
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
